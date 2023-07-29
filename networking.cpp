@@ -5,10 +5,15 @@
 #include "networking.h"
 
 
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP);
+
 void initNetworking() {
+	log("begin init networking");
 	initWifi();
 	refreshmDNS();
 	initOTA();
+	initNTP();
 }
 
 
@@ -19,7 +24,7 @@ void refreshmDNS() {
 		log("mDNS setup failed");
 	}
 	else {
-		MDNS.addService("http","tcp", LISTEN_PORT);
+		MDNS.addService("qdled","tcp", LISTEN_PORT);
 		log("mDNS setup complete!");
 	}
 }
@@ -49,9 +54,10 @@ void initWifi() {
 		config["wifi"]["password"] = WIFI_SSID;
 		config["wifi"]["mode"] = WIFI_MODE_STATION;
 	}
-
 	switch(int(config["wifi"]["mode"])) {
 		case WIFI_MODE_UNCONFIGURED:
+			log("unconfigured wifi somehow?");
+			delay(1000);
 			break;
 
 		case WIFI_MODE_STATION:
@@ -69,6 +75,7 @@ void initWifi() {
 
 
 void initStationWifi() {
+
 	WiFi.begin(String(config[CONFIG_WIFI]["ssid"]), String(config[CONFIG_WIFI]["password"]));
 	
 	log("Connecting to " + String(config[CONFIG_WIFI]["ssid"]));
@@ -80,13 +87,15 @@ void initStationWifi() {
 		log("Attempt #" + String(x));
 		x++;
 	}
-	
 	log("Connection established!");	
 	log("IP Address: " + WiFi.localIP().toString());
+	config["ip_address"] = WiFi.localIP().toString();
+	config["mac_address"] = WiFi.macAddress();
 }
 
 void initOTA() {
 	log("starting OTA init");
+	ArduinoOTA.setHostname(config[CONFIG_MDNS]);
 	ArduinoOTA.onStart([]() {
 		log("Starting OTA");
 	});
@@ -105,9 +114,16 @@ void initOTA() {
 	ArduinoOTA.begin();
 }
 
+void initNTP() {
+	timeClient.begin();
+}
 
+NTPClient getTimeClient() {
+	return timeClient;
+}
 
 void networkingLoop() {
 	ArduinoOTA.handle();
 	MDNS.update();
+	timeClient.update();
 }

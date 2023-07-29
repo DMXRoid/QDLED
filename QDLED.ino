@@ -10,10 +10,6 @@
 
 
 
-//*CRGBPalette16 transitionPalette;
-
-
-
 void initAll() {
 	// setup filesystem
 	initFS();
@@ -28,17 +24,18 @@ void initAll() {
 
 	getHttpServer()->init();
 	// fire up the LEDs
+  //delay(5000);
 	initLEDs();
 	// pause for things to catch up
 	delay(500);
 }
 
 
+
+
 void setup() {
-	Serial.begin(9600);
-	delay(2000);
+	//Serial.begin(9600);
 	initAll();
-	delay(500);
 }
 
 
@@ -47,6 +44,4 @@ void loop() {
 	getHttpServer()->loop();
 	getLEDController()->loop();
 }
-
-
 

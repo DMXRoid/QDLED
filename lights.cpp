@@ -9,15 +9,29 @@
 LEDs* ledController;
 
 LEDs::LEDs(int newLEDCount, int newMode, LinkedList<String>* newColors) {
+	isGradient = false;
+	colors = new LinkedList<CRGB>();
+	preprocessedColors = new LinkedList<CRGB>();
+	isGradient = (config["color"]["is_gradient"]) ? true : false;
+	isEnabled = (config["lights"]["is_enabled"]) ? true : false;
+	log("setting led count");
 	setCount(newLEDCount);
+	log("setting led colors");
 	setColors(newColors);
-	setMode(newMode);
-	leds = (struct CRGB *) malloc(100 * sizeof(struct CRGB *));
-	
+	setBrightness(config["lights"]["brightness"]);
 
+
+	log("setting led mode");
+	setMode(newMode);
+	log("setting led delays");
+	stepDelay = config["color"]["step_delay"];
+	fadeDelay = config["color"]["fade_delay"];
+
+	log("allocating LEDs");
+	log("pin setup: pin #: " + config["data_pin"].as<String>());
 	switch (config["data_pin"].as<int>()) {
 		case 1:
-		FastLED.addLeds<WS2812B, 1, GRB>(leds, 100);
+		FastLED.addLeds<WS2812B, 1, GRB>(leds, 200);
 		break;
 		case 2:
 		FastLED.addLeds<WS2812B, 2, GRB>(leds, 100);
@@ -48,58 +62,248 @@ LEDs::LEDs(int newLEDCount, int newMode, LinkedList<String>* newColors) {
 		FastLED.addLeds<WS2812B, 16, GRB>(leds, 100);
 		break;
 	}
-
 	update();
 }
 
 void LEDs::setCount(int newLEDCount) {
 	ledCount = newLEDCount;
-	
 }
 
 void LEDs::setMode(int newMode) {
 	mode = newMode;
 }
 
-void LEDs::setColors(LinkedList<String>* newColors) {
-	colors = newColors;
+void LEDs::setStepDelay(int sd) {
+	stepDelay = sd;
 }
 
-LinkedList<String>* LEDs::getColors() {
+void LEDs::setFadeDelay(int fd) {
+	fadeDelay = fd;
+}
+
+void LEDs::setBrightness(int b) {
+	brightness = b;
+	FastLED.setBrightness(brightness);
+}
+
+void LEDs::setIsEnabled(bool e) {
+	isEnabled = e;
+}
+
+void LEDs::setColors(LinkedList<String>* newColors) {
+	log("adding colors");
+	if(colors->size() > 0) {
+		log("clearing current colors");
+		colors->clear();
+	}
+	
+	for(int x = 0; x < newColors->size(); x++) {
+		log("adding color:::" + newColors->get(x));
+		colors->add(stringToCRGB(newColors->get(x)));
+	}
+	
+	preprocessedColors = colors;
+	log("finished adding colors");
+}
+
+LinkedList<CRGB>* LEDs::getColors() {
 	return colors;
+}
+
+void LEDs::setIsGradient(bool ig) {
+	isGradient = ig;
 }
 
 void LEDs::update() {
 	log("Starting update...");
-	switch (mode) {
-		case LIGHT_MODE_SINGLE_COLOR:
-		log("About to update single color...");
-		singleColor();
-		log("Single color updated...");
-		break;
+	if(isEnabled) {
+		if(isGradient && colors->size() > 1) {
+			if(preprocessedColors->size() > 0) {
+				colors = preprocessedColors;
+			}
+			setupGradient();
+			int stepSize = 1;
+			if(mode != LIGHT_MODE_FADE) {
+				stepSize = floor(255 / ledCount);
+			}
+			log("step size is ::: " + String(stepSize));
+			processGradient(stepSize);
+		}
+		switch (mode) {
+			case LIGHT_MODE_STATIC:
+			staticLights();
+			break;
 
-		case LIGHT_MODE_MULTI_COLOR_STATIC:
-		multiColorStatic();
-		break;
+			case LIGHT_MODE_STEP:
+			stepLights();
+			break;
 
-		case LIGHT_MODE_MULTI_COLOR_STEP:
-		multiColorStep();
-		break;
+			case LIGHT_MODE_FADE:
+			fadeLights();
+			break;
+		}
+	}
+	else {
+		FastLED.clear();
+		FastLED.show();
+	}
+	
+}
 
-		case LIGHT_MODE_GRADIENT_FADE:
-		gradientFade();
-		break;
+void LEDs::staticLights() {
+	FastLED.setBrightness(config["lights"]["brightness"]);
+	int y;
+	int cs = colors->size();
+	for (int x = 0; x < ledCount; x++) {
+		y = (x % ledCount) % cs;
+		leds[x] = colors->get(y);
+	}
+	FastLED.show();
+	FastLED.show();
+}
+
+void LEDs::stepLights() {
+	int y;
+	int cs = colors->size();
+	if (cs < 2) {
+		staticLights();
+	}
+	for (int x = 0; x < ledCount; x++) {
+		y = (((x % ledCount) % cs) + step) % cs;
+		leds[x] = colors->get(y);
+	}
+	FastLED.show();
+	FastLED.show();
+	step++;
+}
+
+
+void LEDs::loop() {
+	if(shouldRun()) {
+		switch(mode) {
+			case LIGHT_MODE_STATIC:
+			break;
+
+			
+			case LIGHT_MODE_STEP:
+			stepLights();
+			break;
+
+			case LIGHT_MODE_FADE:
+			fadeLights();
+			break;
+		}
+		lastRunTime = millis();
 	}
 }
+
+void LEDs::emptyLoop() {}
+
+void LEDs::fadeLights() {
+	// progress "forward"
+	if ( fadeDirection == 0) {
+		//log("step " + String(step) + " ::: Size: " + String(gradientStepSize));
+		if (step >= colors->size()) {
+	//		log("Turning over");
+			fadeDirection = 1;
+			step = colors->size() - 1;
+		}
+		else {
+			step++;
+		}
+	}
+	else {
+		if (step == 0) {
+			fadeDirection = 0;
+		}
+		else {
+			step--;
+		}
+	}
+
+	singleColor(colors->get(step));
+}
+
+
+
+void LEDs::processGradient(int stepSize = 1) {
+	preprocessedColors = colors;
+	colors->clear();
+	for (int x = 0; x <= 255; x++) {
+		if (x % stepSize == 0) {
+			colors->add(ColorFromPalette(gradientPalette, (( x <= 248 ) ? x : 248 ), 255));
+		}
+	}
+}
+
+void LEDs::setupGradient() {
+	log("Setting up gradient");
+	int gss = ceil(256 / (colors->size() - 1));
+
+	log("Gradient step size:::" + String(gss));
+	
+
+	unsigned char gradientColors[4 * colors->size()];
+	for ( int x = 0; x < colors->size(); x++) {
+		int y = x * 4;
+		gradientColors[y + 0] = (x == colors->size() - 1) ? 255 : (x * gss);
+		gradientColors[y + 1] = colors->get(x).red;
+		gradientColors[y + 2] = colors->get(x).green;
+		gradientColors[y + 3] = colors->get(x).blue;
+
+		//log("gradient array ::: " + String(gradientColors[y+0]) + ", " + String(gradientColors[y+1]) + ", " + String(gradientColors[y+2]) + ", " + String(gradientColors[y+3]) + ", ");
+	}
+
+	log("Loading gradient palette");
+	gradientPalette.loadDynamicGradientPalette(gradientColors);
+	
+	log("gradient palette loaded");
+	step = 0;
+	fadeDirection = 0;
+}
+
+bool LEDs::shouldRun() {
+	return isEnabled && (mode != LIGHT_MODE_STATIC) && (millis() - lastRunTime) > ((mode == LIGHT_MODE_FADE) ? fadeDelay : stepDelay);
+}
+
+long int stringToColor(String color) {
+	return strtol(color.c_str(), NULL, 16);
+}
+
+CRGB stringToCRGB(String c) {
+	CRGB rgb(strtol(c.substring(2,8).c_str(), NULL, 16));
+	//log("Color " + c + " ::: r: " + rgb.red + "::: g: " + rgb.green + " ::: b: " + rgb.blue);
+	return rgb;
+}
+
+LinkedList<String>* colorJSONToList(JsonArray cArray) {
+	LinkedList<String> *c = new LinkedList<String>();
+	for (JsonVariant v : cArray) {
+	//	log("Adding color " + v.as<String>());
+		c->add(v.as<String>());
+	}
+	
+	return c;
+}
+
+
+
+LEDs* getLEDController() {
+	return ledController;
+}
+void initLEDs() {
+	ledController = new LEDs(config["lights"]["count"].as<int>(), config["color"]["mode"].as<int>(), colorJSONToList(config["color"]["colors"].as<JsonArray>()));
+}
+
+
+
+// mostly deprecated 
 
 void LEDs::singleColor() {
 	//log("Setting single color...");
 
-	
-	CRGB c = stringToCRGB(colors->get(0));
 	for (int x = 0; x < ledCount; x++) {
-		leds[x] = c;
-		
+		leds[x] = colors->get(0);
 	}
 	FastLED.show();
 	FastLED.show();
@@ -120,34 +324,31 @@ void LEDs::multiColorStatic() {
 	int cs = colors->size();
 	for (int x = 0; x < ledCount; x++) {
 		y = (x % ledCount) % cs;
-		leds[x] = stringToCRGB(colors->get(y));
+		leds[x] = colors->get(y);
 	}
 	FastLED.show();
 	FastLED.show();
 }
 
-void LEDs::loop() {
-	switch(mode) {
-		case LIGHT_MODE_SINGLE_COLOR:
-		case LIGHT_MODE_MULTI_COLOR_STATIC:
-		break;
+void LEDs::multiColorStep() {
+	int y;
+	int cs = colors->size();
+	for (int x = 0; x < ledCount; x++) {
+		y = (((x % ledCount) % cs) + step) % cs;
 
-		
-		case LIGHT_MODE_MULTI_COLOR_STEP:
-		multiColorStepLoop();
-		break;
-
-		case LIGHT_MODE_GRADIENT_FADE:
-		gradientFadeLoop();
-		break;
+		leds[x] = colors->get(y);
 	}
+	FastLED.show();
+	FastLED.show();
+	delay(stepDelay);
+	step++;
 }
-
-void LEDs::emptyLoop() {}
 
 void LEDs::multiColorStepLoop() {
 	multiColorStep();
 }
+
+/*
 
 void LEDs::gradientFadeLoop() {
 	int i;
@@ -185,80 +386,8 @@ void LEDs::gradientFadeLoop() {
 	i = (i > 248) ? 248 : i;
 	//log("gradient palette index: " + String(i));
 	singleColor(ColorFromPalette(gradientFadePalette, i, 255));
-	delay(50);
-}
-
-void LEDs::multiColorStep() {
-	int y;
-	int cs = colors->size();
-	for (int x = 0; x < ledCount; x++) {
-		y = (((x % ledCount) % cs) + step) % cs;
-
-		leds[x] = stringToCRGB(colors->get(y));
-	}
-	FastLED.show();
-	FastLED.show();
-	delay(500);
-	step++;
-}
-
-void LEDs::gradientFade() {
-	//log("Starting gradient fade");
-	int gss = ceil(256 / (colors->size() - 1));
-
-	//log("Gradient step size:::" + String(gss));
-
-	unsigned char gradientColors[4 * colors->size()];
-	for ( int x = 0; x < colors->size(); x++) {
-		int y = x * 4;
-		CRGB tempColor = stringToCRGB(colors->get(x));
-		gradientColors[y + 0] = (x == colors->size() - 1) ? 255 : (x * gss);
-		gradientColors[y + 1] = tempColor.red;
-		gradientColors[y + 2] = tempColor.green;
-		gradientColors[y + 3] = tempColor.blue;
-
-		log("gradient array for " + colors->get(x) + ":::" + String(gradientColors[y+0]) + ", " + String(gradientColors[y+1]) + ", " + String(gradientColors[y+2]) + ", " + String(gradientColors[y+3]) + ", ");
-	}
-
-	log("Loading gradient palette");
-	gradientFadePalette.loadDynamicGradientPalette(gradientColors);
-	log("gradient palette loaded");
-	step = 0;
-	gradientDirection = 0;
-}
-
-
-
-
-long int stringToColor(String color) {
-	return strtol(color.c_str(), NULL, 16);
-}
-
-CRGB stringToCRGB(String c) {
-	CRGB rgb(strtol(c.substring(2,8).c_str(), NULL, 16));
-	//log("Color " + c + " ::: r: " + rgb.red + "::: g: " + rgb.green + " ::: b: " + rgb.blue);
-	return rgb;
-}
-
-LinkedList<String>* colorJSONToList(JsonArray cArray) {
-	LinkedList<String> *c = new LinkedList<String>();
-	for (JsonVariant v : cArray) {
-	//	log("Adding color " + v.as<String>());
-		c->add(v.as<String>());
-	}
-	
-	return c;
-}
-
-
-
-LEDs* getLEDController() {
-	return ledController;
-}
-void initLEDs() {
-	ledController = new LEDs(config["lights"]["count"].as<int>(), config["color"]["mode"].as<int>(), colorJSONToList(config["color"]["colors"].as<JsonArray>()));
-}
-
+	delay(fadeDelay);
+}*/
 
 CHSV RGBtoHSV (CRGB rgb) {
 	double hsv[3];

@@ -1,5 +1,7 @@
+#include <NTPClient.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
+#include <WiFiUdp.h>
 #include <ArduinoJson.h>
 #include <ArduinoOTA.h>
 
@@ -28,6 +30,7 @@ class WiFi {
 };
 
 
+
 void refreshmDNS();
 void setmDNSName();
 void initWifi();
@@ -35,3 +38,5 @@ void initNetworking();
 void initStationWifi();
 void networkingLoop();
 void initOTA();
+void initNTP();
+NTPClient getTimeClient();

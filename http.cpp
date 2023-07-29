@@ -1,3 +1,4 @@
+#include "ArduinoJson/Array/JsonArray.hpp"
 #include "config.h"
 #include "util.h"
 #include "networking.h"
@@ -38,9 +39,13 @@ void HttpServer::init() {
 	});
 
 	server->on("/get-file",[this]() {
-		String l = getFileContents("/" + server->arg("n"));
-		l.replace("\n","<br>");
+		String l = getFileContents(server->arg("n"));
+		//log("requested file" + l);
+		l.replace("\n","\n<br>\n");
 		sendHTMLResponse(l, 200);
+	});
+	server->on("/ok",[this]() {
+		sendHTMLResponse("ok", 200);
 	});
 
 		server->begin();
@@ -69,69 +74,20 @@ void HttpServer::handleJSONAction() {
 			responseMessage["message"] = config;
 		}
 
-		/*
-			{
-				"action": "set-single-color",
-				"color": "0x00FF00"
-			}
-		*/
-		else if(requestJSON["action"] == "set-single-color")  {
-			if(requestJSON["color"] != "") {
-				
-				log(":::HTTP::: Setting single color to " + String(requestJSON["color"]));
-				setSingleColorAction(requestJSON["color"].as<String>());
-				responseMessage["code"] = 200;
-				responseMessage["message"] = "success";
-			}
-			else {
-				responseMessage["code"] = 500;
-				responseMessage["message"] = "Color is required";
-			}
+		else if(requestJSON["action"] == "set-colors") {
+			setColorsAction(requestJSON["colors"], requestJSON["is_gradient"]);
 		}
 
-		/*
-			{
-				"action": "set-multi-static",
-				"colors": [
-					"0xFF0000",
-					"0xFFFFFF",
-					"0x0000FF"
-				]
-			}
-
-		*/
-
-		else if(requestJSON["action"] == "set-multi-static" && requestJSON["colors"]) {
-			setMultiColorStaticAction(requestJSON["colors"].as<JsonArray>());
-			responseMessage["code"] = 200;
-			responseMessage["message"] = "success";
+		else if(requestJSON["action"] == "set-light-mode") {
+			setModeAction(requestJSON["mode"]);
 		}
 
-		/*
-			{
-				"action": "set-multi-step",
-				"colors": [
-					"0xFF0000",
-					"0xFFFFFF",
-					"0x0000FF"
-				]
-			}
-
-		*/
-
-		else if(requestJSON["action"] == "set-multi-step" && requestJSON["colors"]) {
-			setMultiColorStepAction(requestJSON["colors"].as<JsonArray>());
-			responseMessage["code"] = 200;
-			responseMessage["message"] = "success";
+		else if(requestJSON["action"] == "set-brightness") {
+			setBrightnessAction(requestJSON["brightness"]);
 		}
-
-		else if(requestJSON["action"] == "set-gradient-fade" && requestJSON["colors"]) {
-			log("gradient request");
-			setGradientFadeAction(requestJSON["colors"].as<JsonArray>());
-			responseMessage["code"] = 200;
-			responseMessage["message"] = "success";
+		else if(requestJSON["action"] == "set-is-enabled") {
+			setIsEnabledAction(requestJSON["is_enabled"]);
 		}
-
 		else if(requestJSON["action"] == "set-data-pin") {
 			config["data_pin"] = server->arg("p");
 			saveConfig();
@@ -140,11 +96,52 @@ void HttpServer::handleJSONAction() {
 		}
 
 		else if(requestJSON["action"] == "set-light-count") {
+			setLightCountAction(requestJSON["count"].as<int>());
+		}
+
+		else if(requestJSON["action"] == "set-fade-delay") {
+			log("setting fade delay to " + String(requestJSON["fade_delay"]));
+			getLEDController()->setFadeDelay(requestJSON["fade_delay"]);
+			config["color"]["fade_delay"] = requestJSON["fade_delay"];
+			saveConfig();
+		}
+		else if(requestJSON["action"] == "set-step-delay") {
+			log("setting step delay to " + String(requestJSON["step_delay"]));
+			getLEDController()->setStepDelay(requestJSON["step_delay"]);
+			config["color"]["step_delay"] = requestJSON["step_delay"];
+			saveConfig();
+		}
+		else if(requestJSON["action"] == "set-light-count") {
+			config["lights"]["count"] = requestJSON["count"];
 			log("setting light count to " + String(requestJSON["count"]));
 			setLightCountAction(requestJSON["count"].as<int>());
 			responseMessage["code"] = 200;
 			responseMessage["message"] = "success";
 		}
+		else if (requestJSON["action"] == "set-config") {
+			config = requestJSON["config"];
+			saveConfig();
+			resetFunc();
+			responseMessage["code"] = 200;
+			responseMessage["message"] = "success";
+		}
+
+		else if (requestJSON["action"] == "set-color-config") {
+			config["color"] = requestJSON["color-config"];
+			saveConfig();
+			getLEDController()->update();
+			responseMessage["code"] = 200;
+			responseMessage["message"] = "success";
+		}
+
+		else if (requestJSON["action"] == "set-light-config") {
+			config["light"] = requestJSON["light-config"];
+			saveConfig();
+			getLEDController()->update();
+			responseMessage["code"] = 200;
+			responseMessage["message"] = "success";
+		}
+
 
 		/*
 			{ "action" : "reset"}
@@ -152,55 +149,68 @@ void HttpServer::handleJSONAction() {
 
 		else if (requestJSON["action"] == "reset") {
 			resetFunc();
+
 		}
 	}
 
 }
 
-void HttpServer::setSingleColorAction(String c) {
-	log(":::HTTP::: Int color is " + String(c));
-	getLEDController()->setMode(LIGHT_MODE_SINGLE_COLOR);
-	getLEDController()->getColors()->clear();
-	getLEDController()->getColors()->add(c);
-	getLEDController()->update();
-	config["color"]["mode"] = LIGHT_MODE_SINGLE_COLOR;
-	config["color"]["colors"] = c;
-	saveConfig();
-};
-
-void HttpServer::setMultiColorStaticAction(JsonArray c) {
-	getLEDController()->setMode(LIGHT_MODE_MULTI_COLOR_STATIC);
-	getLEDController()->setColors(colorJSONToList(c));
-	getLEDController()->update();
-	config["color"]["mode"] = LIGHT_MODE_MULTI_COLOR_STATIC;
-	config["color"]["colors"] = c;
-	saveConfig();
-}
-
-void HttpServer::setMultiColorStepAction(JsonArray c) {
-	log("Multi step color begin");
-	getLEDController()->setMode(LIGHT_MODE_MULTI_COLOR_STEP);
-	getLEDController()->setColors(colorJSONToList(c));
-	getLEDController()->update();
-	config["color"]["mode"] = LIGHT_MODE_MULTI_COLOR_STEP;
-	config["color"]["colors"] = c;
-	saveConfig();
-}
-
-void HttpServer::setGradientFadeAction(JsonArray c) {
-	log("Gradient begin");
-	getLEDController()->setMode(LIGHT_MODE_GRADIENT_FADE);
-	getLEDController()->setColors(colorJSONToList(c));
-	getLEDController()->update();
-	config["color"]["mode"] = LIGHT_MODE_GRADIENT_FADE;
-	config["color"]["colors"] = c;
-	saveConfig();
-}
 
 void HttpServer::setLightCountAction(int newLightCount) {
 	getLEDController()->setCount(newLightCount);
 	getLEDController()->update();
+	
+	config["lights"]["count"] = newLightCount;
 	saveConfig();
+
+	responseMessage["code"] = 200;
+	responseMessage["message"] = "success";
+}
+
+void HttpServer::setColorsAction(JsonArray c, bool isGradient) {
+	getLEDController()->setColors(colorJSONToList(c));
+	getLEDController()->setIsGradient(isGradient);
+	getLEDController()->update();
+	
+	config["color"]["colors"] = c;
+	config["color"]["is_gradient"] = isGradient;
+	saveConfig();
+
+	responseMessage["code"] = 200;
+	responseMessage["message"] = "success";
+}
+
+void HttpServer::setModeAction(int m) {
+	getLEDController()->setMode(m);
+	getLEDController()->update();
+
+	config["color"]["mode"] = m;
+	saveConfig();
+
+	responseMessage["code"] = 200;
+	responseMessage["message"] = "success";
+}
+
+void HttpServer::setBrightnessAction(int b) {
+	getLEDController()->setBrightness(b);
+	getLEDController()->update();
+
+	config["lights"]["brightness"] = b;
+	saveConfig();
+
+	responseMessage["code"] = 200;
+	responseMessage["message"] = "success";
+}
+
+void HttpServer::setIsEnabledAction(bool e) {
+	getLEDController()->setIsEnabled(e);
+	getLEDController()->update();
+
+	config["lights"]["is_enabled"] = e;
+	saveConfig();
+
+	responseMessage["code"] = 200;
+	responseMessage["message"] = "success";
 }
 
 void HttpServer::loop() {

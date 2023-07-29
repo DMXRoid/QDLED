@@ -1,3 +1,4 @@
+#include "ArduinoJson/Array/JsonArray.hpp"
 #include <ESP8266WebServer.h>
 #include <ArduinoJson.h>
 
@@ -19,12 +20,11 @@ class HttpServer {
 
 		void handleJSONAction();		
 
-		void setSingleColorAction(String);
-		void setMultiColorStaticAction(JsonArray);
-		void setMultiColorStepAction(JsonArray);
-		void setGradientFadeAction(JsonArray);
 		void setLightCountAction(int);
-		
+		void setColorsAction(JsonArray, bool);
+		void setModeAction(int);
+		void setBrightnessAction(int);
+		void setIsEnabledAction(bool);
 };
 
 

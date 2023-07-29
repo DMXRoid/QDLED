@@ -1,12 +1,12 @@
+#include "FS.h"
 
 #include "config.h"
 #include "util.h"
-
 File logFile; 
 
 void log(String l) {
 	Serial.println(l);
-	if(logFile) {
+	if(true || logFile) {
 		int b = logFile.println(l);
 		if(!b) {
 			Serial.println("Could not write to log file.	Log line: " + l);
@@ -18,7 +18,7 @@ void log(String l) {
 }
 
 void initFS() {
-	if(LittleFS.begin()) {
+	if(SPIFFS.begin()) {
 		log("Filesystem mounted");
 	}
 	else {
@@ -31,15 +31,27 @@ void initFS() {
 
 void initLogs() {
 	// truncate the log file
-	logFile = LittleFS.open(LOG_FILE, "w+");
+	logFile = SPIFFS.open(LOG_FILE, "w+");
+	if(!logFile) {
+		Serial.println("Couldn't create log file");
+	}
 }
 
 String getFileContents(String fileName) {
 	String c;
-	File f = LittleFS.open(fileName, "r");
+	File f;
+	if(fileName == LOG_FILE) {
+		f = logFile;
+		f.seek(0, fs::SeekSet);
+	}
+	else {
+		f = SPIFFS.open(fileName, "r");
+	}
 	if(f) {
 		c = f.readString();
-		f.close();
+		if (fileName != LOG_FILE) {
+			f.close();
+		}
 	}
 	else {
 		log("Couldn't open file: " + fileName);
@@ -50,7 +62,7 @@ String getFileContents(String fileName) {
 bool writeToFile(String fileName, String contents) {
 	log("Writing to file " + fileName + ": " + contents);
 	bool s;
-	File f = LittleFS.open(fileName, "w");
+	File f = SPIFFS.open(fileName, "a+");
 	if(f) {
 		int b = f.print(contents);
 		if(!b) {

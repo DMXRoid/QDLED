@@ -6,14 +6,13 @@
 #include <LinkedList.h>
 #include <HardwareSerial.h>
 #include <ArduinoJson.h>
-
 #if FASTLED_VERSION < 3001000
 #error "Requires FastLED 3.1 or later; check github for latest code."
 #endif
 
 
 class LEDs;
-extern struct CRGB leds[];
+extern struct CRGB leds[200];
 
 class LEDs {
 	public: 
@@ -21,21 +20,42 @@ class LEDs {
 		void setMode(int mode);
 		void setColors(LinkedList<String>*);
 		void setCount(int);
-		LinkedList<String>* getColors();
+		void setStepDelay(int);
+		void setFadeDelay(int);
+		void setBrightness(int);
+		void setIsEnabled(bool);
+		LinkedList<CRGB>* getColors();
 		void update();
 		void loop();
+		void setIsGradient(bool);
+
+		bool isGradient;
+		
 
 	private:
 		int mode;
 		int ledCount;
 		int step; 
-		LinkedList<String> *colors;
+		int stepDelay;
+		int fadeDelay;
+		int brightness;
+		bool isEnabled;
 
-		CRGBPalette32 gradientFadePalette;
-		int gradientDirection;
-		int gradientStepSize = 2;
+		unsigned long lastRunTime;
 
-		struct CRGB *leds = NULL;
+		LinkedList<CRGB> *colors;
+		LinkedList<CRGB> *preprocessedColors;
+
+		CRGBPalette32 gradientPalette;
+		int fadeDirection;
+		
+		struct CRGB leds[200];
+
+		void setupGradient();
+		void processGradient(int);
+		void staticLights();
+		void stepLights();
+		void fadeLights();
 
 		
 		void singleColor();
@@ -46,6 +66,8 @@ class LEDs {
 		void gradientFadeLoop();
 		void multiColorStepLoop();
 		void emptyLoop();
+		bool shouldRun();
+	
 		
 
 		
