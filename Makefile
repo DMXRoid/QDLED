@@ -12,5 +12,5 @@ update:
 	$(MAKE) push
 
 push:
-	arduino-cli upload -p ${TARGET}  -b esp8266:esp8266:nodemcuv2 --board-options="baud=74880" --board-options="eesz=autoflash" .
+	arduino-cli upload -p ${TARGET}  -b esp8266:esp8266:nodemcuv2 --board-options="baud=74880" --board-options="eesz=1M64" .
 

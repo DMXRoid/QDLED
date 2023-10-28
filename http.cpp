@@ -55,8 +55,6 @@ void HttpServer::init() {
 
 void HttpServer::handleJSONAction() {
 	if(requestJSON["action"]) {
-		log("action: " + String(requestJSON["action"]));
-
 		/*
 			{
 				"action": "get-config",
@@ -119,6 +117,13 @@ void HttpServer::handleJSONAction() {
 			responseMessage["message"] = "success";
 		}
 		else if (requestJSON["action"] == "set-config") {
+			mergeJSON(config, requestJSON["config"]);
+			saveConfig();
+			resetFunc();
+			responseMessage["code"] = 200;
+			responseMessage["message"] = "success";
+		}
+		else if (requestJSON["action"] == "override-config") {
 			config = requestJSON["config"];
 			saveConfig();
 			resetFunc();
@@ -127,22 +132,20 @@ void HttpServer::handleJSONAction() {
 		}
 
 		else if (requestJSON["action"] == "set-color-config") {
-			config["color"] = requestJSON["color-config"];
+			mergeJSON(config["color"], requestJSON["color-config"]);
 			saveConfig();
-			getLEDController()->update();
+			getLEDController()->updateFromConfig();
 			responseMessage["code"] = 200;
 			responseMessage["message"] = "success";
 		}
 
 		else if (requestJSON["action"] == "set-light-config") {
-			config["light"] = requestJSON["light-config"];
+			mergeJSON(config["lights"],requestJSON["light-config"]);
 			saveConfig();
-			getLEDController()->update();
+			getLEDController()->updateFromConfig();
 			responseMessage["code"] = 200;
 			responseMessage["message"] = "success";
 		}
-
-
 		/*
 			{ "action" : "reset"}
 		*/

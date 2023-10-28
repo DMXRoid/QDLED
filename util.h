@@ -9,3 +9,5 @@ bool writeToFile(String, String);
 void log(String);
 void initFS();
 void initLogs();
+
+void mergeJSON(JsonVariant, JsonVariantConst);

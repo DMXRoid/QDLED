@@ -78,3 +78,21 @@ bool writeToFile(String fileName, String contents) {
 	}
 	return s;
 }
+
+void mergeJSON(JsonVariant dst, JsonVariantConst src)
+{
+  if (src.is<JsonObjectConst>())
+  {
+    for (JsonPairConst kvp : src.as<JsonObjectConst>())
+    {
+      if (dst[kvp.key()]) 
+        mergeJSON(dst[kvp.key()], kvp.value());
+      else
+        dst[kvp.key()] = kvp.value();
+    }
+  }
+  else
+  {
+    dst.set(src);
+  }
+}

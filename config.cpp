@@ -32,18 +32,12 @@ String initialConfig = R"(
 		},
 		"data_pin": 1,
 		"mdns_name": "",
-		"friendly_name": ""
+		"friendly_name": "",
 		"ip_address": "0.0.0.0",
 		"mac_address": ""
 
 	}
 )";
-
-
-
-
-
-
 
 bool isConfigured;
 
@@ -58,6 +52,7 @@ void initConfig() {
   DeserializationError e = deserializeJson(config, c);
   if(e) {
 	log("Deserialization error: " + String(e.f_str()));
+	deserializeJson(config, initialConfig);
   }
   /*else {
 		log("Initial config: " + initialConfig + " ... ");

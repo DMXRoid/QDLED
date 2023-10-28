@@ -6,14 +6,18 @@
 
 
 WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP);
+WiFiClient wifiClient;
+HttpClient httpClient = HttpClient(wifiClient, CONTROLLER_ADDRESS, 8080);
 
+
+unsigned long lastRegisterTime;
 void initNetworking() {
+	lastRegisterTime = 0;
 	log("begin init networking");
 	initWifi();
 	refreshmDNS();
 	initOTA();
-	initNTP();
+	
 }
 
 
@@ -59,7 +63,7 @@ void initWifi() {
 			log("unconfigured wifi somehow?");
 			delay(1000);
 			break;
-
+		
 		case WIFI_MODE_STATION:
 			initStationWifi();
 			break;
@@ -91,6 +95,8 @@ void initStationWifi() {
 	log("IP Address: " + WiFi.localIP().toString());
 	config["ip_address"] = WiFi.localIP().toString();
 	config["mac_address"] = WiFi.macAddress();
+	WiFi.setAutoReconnect(true);
+	WiFi.persistent(true);
 }
 
 void initOTA() {
@@ -114,16 +120,16 @@ void initOTA() {
 	ArduinoOTA.begin();
 }
 
-void initNTP() {
-	timeClient.begin();
-}
 
-NTPClient getTimeClient() {
-	return timeClient;
-}
+
 
 void networkingLoop() {
 	ArduinoOTA.handle();
 	MDNS.update();
-	timeClient.update();
+	if (millis() - lastRegisterTime > 60000) {
+		lastRegisterTime = millis();
+		String sc;
+		serializeJsonPretty(config, sc);
+		httpClient.post("/register-led", "application/json", String('{"led":') + sc + String('}'));
+	}
 }

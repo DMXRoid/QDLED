@@ -12,6 +12,7 @@
 #define LIGHT_MODE_STATIC 0
 #define LIGHT_MODE_STEP 1
 #define LIGHT_MODE_FADE 2
+#define LIGHT_MODE_WHOLE_STEP 3
 
 
 #define WIFI_MODE_UNCONFIGURED 0
@@ -25,6 +26,8 @@
 
 #define LOG_FILE "logs.txt"
 #define CONFIG_FILE "config.json"
+
+#define CONTROLLER_ADDRESS "192.168.69.102"
 
 extern StaticJsonDocument<2048> config;
 

@@ -65,6 +65,17 @@ LEDs::LEDs(int newLEDCount, int newMode, LinkedList<String>* newColors) {
 	update();
 }
 
+void LEDs::updateFromConfig() {
+	setColors(colorJSONToList(config["color"]["colors"].as<JsonArray>()));
+	setCount(config["lights"]["count"]);
+	setMode(config["color"]["mode"]);
+	setFadeDelay(config["color"]["fade_delay"]);
+	setStepDelay(config["color"]["step_delay"]);
+	isGradient = (config["color"]["is_gradient"]) ? true : false;
+	isEnabled = (config["lights"]["is_enabled"]) ? true : false;
+	update();
+}
+
 void LEDs::setCount(int newLEDCount) {
 	ledCount = newLEDCount;
 }
@@ -141,10 +152,14 @@ void LEDs::update() {
 			case LIGHT_MODE_FADE:
 			fadeLights();
 			break;
+
+			case LIGHT_MODE_WHOLE_STEP:
+			wholeStepLights();
+			break;
 		}
 	}
 	else {
-		FastLED.clear();
+		FastLED.clear(true);
 		FastLED.show();
 	}
 	
@@ -177,6 +192,14 @@ void LEDs::stepLights() {
 	step++;
 }
 
+void LEDs::wholeStepLights() {
+	int cs = colors->size();
+	int y;
+	y = step % cs;
+	singleColor(colors->get(y));
+	step++;
+}
+
 
 void LEDs::loop() {
 	if(shouldRun()) {
@@ -186,12 +209,17 @@ void LEDs::loop() {
 
 			
 			case LIGHT_MODE_STEP:
-			stepLights();
+				stepLights();
 			break;
 
 			case LIGHT_MODE_FADE:
-			fadeLights();
+				fadeLights();
 			break;
+
+			case LIGHT_MODE_WHOLE_STEP:
+				wholeStepLights();
+			break;
+
 		}
 		lastRunTime = millis();
 	}

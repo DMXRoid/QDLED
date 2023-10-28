@@ -28,6 +28,7 @@ class LEDs {
 		void update();
 		void loop();
 		void setIsGradient(bool);
+		void updateFromConfig();
 
 		bool isGradient;
 		
@@ -56,6 +57,7 @@ class LEDs {
 		void staticLights();
 		void stepLights();
 		void fadeLights();
+		void wholeStepLights();
 
 		
 		void singleColor();
